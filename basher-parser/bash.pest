@@ -1,0 +1,22 @@
+space      = _{ " " | "\t" }
+spacebreak = _{ space | NEWLINE }
+
+ident      = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+string     = @{ "\"" ~ (!"\"" ~ (ANY | "\\" ~ "\""))* ~ "\"" }
+raw_string = @{ "'" ~ (!"'" ~ ANY)* ~ "'" }
+
+ops   = { (redir | pipe | and) }
+redir = { ">" | ">>" | "&>" }
+pipe  = { "|" }
+and   = { "&&" }
+
+arg      = @{ LETTER+ | string | raw_string }
+call     =  { arg ~ (space+ ~ arg)* }
+call_seq =  { call ~ (space+ ~ ops ~ space+ ~ call)* }
+
+func = {
+    (("function" ~ space+ ~ ident) | (ident ~ space* ~ "()")) ~ spacebreak* ~ "{" ~ spacebreak* ~ (call_seq ~ spacebreak*)* ~ "}"
+}
+
+expr    =  { (func | call_seq) ~ spacebreak* }
+program = _{ spacebreak* ~ expr* ~ space* }

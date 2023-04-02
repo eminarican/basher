@@ -1,0 +1,7 @@
+[package]
+name = "basher-evaluator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+basher-parser = { path = "../basher-parser" }

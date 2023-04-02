@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "basher-evaluator",
+    "basher-parser",
+]
