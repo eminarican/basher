@@ -12,11 +12,11 @@ and   = { "&&" }
 
 arg      = @{ LETTER+ | string | raw_string }
 call     =  { arg ~ (space+ ~ arg)* }
-call_seq =  { call ~ (space+ ~ ops ~ space+ ~ call)* }
+chain    =  { call ~ (space+ ~ ops ~ space+ ~ call)* }
 
-func = {
-    (("function" ~ space+ ~ ident) | (ident ~ space* ~ "()")) ~ spacebreak* ~ "{" ~ spacebreak* ~ (call_seq ~ spacebreak*)* ~ "}"
-}
+body = { spacebreak* ~ "{" ~ spacebreak* ~ expr* ~ spacebreak* ~ "}" ~ spacebreak* }
 
-expr    =  { (func | call_seq) ~ spacebreak* }
+func = {"function"? ~ space* ~ ident ~ space* ~ "()"? ~ body}
+
+expr    =  _{ (func | chain) ~ spacebreak* }
 program = _{ spacebreak* ~ expr* ~ space* }
