@@ -10,28 +10,30 @@ use pest::iterators::Pair;
 #[grammar = "bash.pest"]
 struct BashParser;
 
-pub fn parse_program(input: &str) -> Result<Vec<Expr>, Error<Rule>> {
+pub type BashError = Error<Rule>;
+
+pub fn parse(input: &str) -> Result<Vec<Expr>, BashError> {
     let pairs = BashParser::parse(Rule::program, input)?;
     Ok(pairs.map(|pair| Expr::parse(pair)).collect())
 }
 
 pub type Scope = Vec<Expr>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Func(Func),
     Chain(Chain),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Func {
-    ident: String,
-    body: Scope,
+    pub ident: String,
+    pub body: Scope,
 }
 
 pub type Chain = Vec<ChainElem>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ChainElem {
     Call(Call),
     Op(Operator),
@@ -39,7 +41,7 @@ pub enum ChainElem {
 
 pub type Call = Vec<String>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operator {
     Redir,
     Pipe,
