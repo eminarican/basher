@@ -52,7 +52,7 @@ impl<F> Evaluator<F> where F: FnMut(String, Vec<String>) -> String {
                 }
             }
         }
-        Some(output?)
+        output
     }
 
     fn eval_call(&mut self, call: &Call, last_output: Option<String>, last_operator: &mut Option<Operator>) -> Option<String> {
