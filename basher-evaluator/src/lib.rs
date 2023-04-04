@@ -8,7 +8,7 @@ use basher_parser::{BashError, Chain, ChainElem, Expr, Func, Scope, Operator};
 use basher_parser::parse;
 
 pub fn eval<F>(input: &str, callback: F) -> Result<Vec<String>, BashError>
-    where for<'a> F: FnMut(String, Vec<String>) -> Vec<String> + 'a,
+    where for<'a> F: FnMut(String, Vec<String>, bool) -> Vec<String> + 'a,
 {
     let ctx = NodeEvalCtx::new(Rc::new(RefCell::new(callback)));
     Ok(parse(input)?.eval(ctx))
@@ -21,11 +21,11 @@ trait NodeEval {
 #[derive(Clone)]
 struct NodeEvalCtx {
     funcs: HashMap<String, Func>,
-    callback: Rc<RefCell<dyn FnMut(String, Vec<String>) -> Vec<String>>>,
+    callback: Rc<RefCell<dyn FnMut(String, Vec<String>, bool) -> Vec<String>>>,
 }
 
 impl NodeEvalCtx {
-    fn new(callback: Rc<RefCell<dyn FnMut(String, Vec<String>) -> Vec<String>>>) -> Self {
+    fn new(callback: Rc<RefCell<dyn FnMut(String, Vec<String>, bool) -> Vec<String>>>) -> Self {
         Self {
             funcs: HashMap::new(),
             callback,
@@ -76,11 +76,13 @@ impl NodeEval for Chain {
             match elem {
                 ChainElem::Call(call) => {
                     let mut call = call.clone();
+                    let mut piped = false;
 
                     match operator.as_ref().unwrap_or(&Operator::And) {
                         Operator::Redir => {}
                         Operator::Pipe => {
                             if let Some(mut output) = last.take() {
+                                piped = true;
                                 call.append(&mut output)
                             }
                         }
@@ -97,7 +99,7 @@ impl NodeEval for Chain {
                     last = Some(if let Some(func) = ctx.funcs.get(&name) {
                         func.eval(ctx.clone())
                     } else {
-                        ctx.callback.borrow_mut().call_mut((name, args))
+                        ctx.callback.borrow_mut().call_mut((name, args, piped))
                     });
                 },
                 ChainElem::Op(op) => operator = Some(op.clone()),
