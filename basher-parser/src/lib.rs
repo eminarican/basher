@@ -12,7 +12,7 @@ struct BashParser;
 
 pub type BashError = Error<Rule>;
 
-pub fn parse(input: &str) -> Result<Vec<Expr>, BashError> {
+pub fn parse(input: &str) -> Result<Scope, BashError> {
     let pairs = BashParser::parse(Rule::program, input)?;
     Ok(pairs.map(|pair| Expr::parse(pair)).collect())
 }
@@ -48,11 +48,11 @@ pub enum Operator {
     And,
 }
 
-pub trait NodeParser {
+pub trait NodeParse {
     fn parse(pair: Pair<Rule>) -> Self;
 }
 
-impl NodeParser for Scope {
+impl NodeParse for Scope {
     fn parse(pair: Pair<Rule>) -> Self {
         let mut exprs = vec![];
 
@@ -64,7 +64,7 @@ impl NodeParser for Scope {
     }
 }
 
-impl NodeParser for Expr {
+impl NodeParse for Expr {
     fn parse(pair: Pair<Rule>) -> Self {
         match pair.as_rule() {
             Rule::func => Self::Func(Func::parse(pair)),
@@ -74,7 +74,7 @@ impl NodeParser for Expr {
     }
 }
 
-impl NodeParser for Func {
+impl NodeParse for Func {
     fn parse(pair: Pair<Rule>) -> Self {
         let mut inner = pair.into_inner();
         let mut next = || inner.next().unwrap();
@@ -86,7 +86,7 @@ impl NodeParser for Func {
     }
 }
 
-impl NodeParser for Chain {
+impl NodeParse for Chain {
     fn parse(pair: Pair<Rule>) -> Self {
         let mut elems = vec![];
 
@@ -104,13 +104,13 @@ impl NodeParser for Chain {
     }
 }
 
-impl NodeParser for Call {
+impl NodeParse for Call {
     fn parse(pair: Pair<Rule>) -> Self {
         pair.into_inner().map(|p| p.as_str().to_string()).collect()
     }
 }
 
-impl NodeParser for Operator {
+impl NodeParse for Operator {
     fn parse(pair: Pair<Rule>) -> Self {
         let item = pair.into_inner().next().unwrap();
 

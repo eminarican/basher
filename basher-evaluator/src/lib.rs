@@ -1,81 +1,113 @@
+#![feature(fn_traits)]
+
 use std::collections::HashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use basher_parser::{BashError, Chain, ChainElem, Expr, Func, Scope, parse, Operator, Call};
+use basher_parser::{BashError, Chain, ChainElem, Expr, Func, Scope, Operator};
+use basher_parser::parse;
 
-pub struct Evaluator<F> {
-    scope: Scope,
-    funcs: HashMap<String, Func>,
-    callback: F,
+pub fn eval<F>(input: &str, callback: F) -> Result<Vec<String>, BashError>
+    where for<'a> F: FnMut(String, Vec<String>) -> Vec<String> + 'a,
+{
+    let ctx = NodeEvalCtx::new(Rc::new(RefCell::new(callback)));
+    Ok(parse(input)?.eval(ctx))
 }
 
-impl<F> Evaluator<F> where F: FnMut(String, Vec<String>) -> String {
-    pub fn new(input: &str, callback: F) -> Result<Self, BashError> {
-        Ok(Self {
-            scope: parse(input)?,
+trait NodeEval {
+    fn eval(&self, ctx: NodeEvalCtx) -> Vec<String>;
+}
+
+#[derive(Clone)]
+struct NodeEvalCtx {
+    funcs: HashMap<String, Func>,
+    callback: Rc<RefCell<dyn FnMut(String, Vec<String>) -> Vec<String>>>,
+}
+
+impl NodeEvalCtx {
+    fn new(callback: Rc<RefCell<dyn FnMut(String, Vec<String>) -> Vec<String>>>) -> Self {
+        Self {
             funcs: HashMap::new(),
             callback,
-        })
-    }
-
-    pub fn eval(&mut self) -> Option<String> {
-        self.eval_scope(self.scope.clone(), None, None)
-    }
-
-    fn eval_scope(&mut self, scope: Scope, last_output: Option<String>, last_operator: Option<Operator>) -> Option<String> {
-        let mut output = last_output;
-        let operator = last_operator;
-
-        for expr in scope.iter() {
-            match expr {
-                Expr::Func(func) => {
-                    self.funcs.insert(func.ident.clone(), func.clone());
-                }
-                Expr::Chain(chain) => {
-                    output = Some(self.eval_chain(chain.clone(), output, operator.clone())?);
-                }
-            }
         }
+    }
+}
+
+impl NodeEval for Scope {
+    fn eval(&self, mut ctx: NodeEvalCtx) -> Vec<String> {
+        let mut output = vec![];
+
+        for expr in self {
+            if let Expr::Func(func) = expr {
+                ctx.funcs.insert(func.ident.clone(), func.clone());
+                continue
+            }
+
+            output.append(&mut expr.eval(ctx.clone()))
+        }
+
         output
     }
+}
 
-    fn eval_chain(&mut self, chain: Chain, last_output: Option<String>, last_operator: Option<Operator>) -> Option<String> {
-        let mut output = last_output;
-        let mut operator = last_operator;
+impl NodeEval for Expr {
+    fn eval(&self, ctx: NodeEvalCtx) -> Vec<String> {
+        match self {
+            Expr::Func(_) => vec![],
+            Expr::Chain(chain) => chain.eval(ctx),
+        }
+    }
+}
 
-        for elem in chain.iter() {
+impl NodeEval for Func {
+    fn eval(&self, ctx: NodeEvalCtx) -> Vec<String> {
+        self.body.eval(ctx)
+    }
+}
+
+impl NodeEval for Chain {
+    fn eval(&self, mut ctx: NodeEvalCtx) -> Vec<String> {
+        let mut output = vec![];
+
+        let mut operator: Option<Operator> = None;
+        let mut last: Option<Vec<String>> = None;
+
+        for elem in self {
             match elem {
                 ChainElem::Call(call) => {
-                    output = Some(self.eval_call(call, output, &mut operator)?);
-                }
-                ChainElem::Op(op) => {
-                    operator = Some(op.clone());
-                }
-            }
-        }
-        output
-    }
+                    let mut call = call.clone();
 
-    fn eval_call(&mut self, call: &Call, last_output: Option<String>, last_operator: &mut Option<Operator>) -> Option<String> {
-        let name = &call[0];
-
-        if let Some(func) = self.funcs.get(name) {
-            return self.eval_scope(func.body.clone(), last_output, None);
-        }
-
-        let mut args: Vec<_> = call.iter().skip(1).map(ToString::to_string).collect();
-
-        if let Some(operator) = last_operator {
-            match operator {
-                Operator::Redir => {}
-                Operator::Pipe => {
-                    if let Some(output) = &last_output {
-                        args.push(output.clone())
+                    match operator.as_ref().unwrap_or(&Operator::And) {
+                        Operator::Redir => {}
+                        Operator::Pipe => {
+                            if let Some(mut output) = last.take() {
+                                call.append(&mut output)
+                            }
+                        }
+                        Operator::And => {
+                            if let Some(mut last) = last.take() {
+                                output.append(&mut last)
+                            }
+                        }
                     }
-                }
-                Operator::And => {}
+
+                    let name = call[0].clone();
+                    let args = call[1..].to_vec();
+
+                    last = Some(if let Some(func) = ctx.funcs.get(&name) {
+                        func.eval(ctx.clone())
+                    } else {
+                        ctx.callback.borrow_mut().call_mut((name, args))
+                    });
+                },
+                ChainElem::Op(op) => operator = Some(op.clone()),
             }
         }
 
-        Some((self.callback)(name.clone(), args))
+        if let Some(mut last) = last.take() {
+            output.append(&mut last)
+        }
+
+        output
     }
 }
