@@ -1,4 +1,4 @@
-space      = _{ " " | "\t" }
+space = _{ " " | "\t" | "\u{00A0}" }
 spacebreak = _{ space | NEWLINE }
 
 ident      = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
