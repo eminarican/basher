@@ -106,7 +106,9 @@ impl NodeParse for Chain {
 
 impl NodeParse for Call {
     fn parse(pair: Pair<Rule>) -> Self {
-        pair.into_inner().map(|p| p.as_str().to_string()).collect()
+        pair.into_inner().map(|p| {
+            strip_quotes(p.as_str().to_string())
+        }).collect()
     }
 }
 
@@ -121,4 +123,14 @@ impl NodeParse for Operator {
             _ => unreachable!()
         }
     }
+}
+
+fn strip_quotes(s: String) -> String {
+    if s.starts_with('\'') && s.ends_with('\'') {
+        &s[1..s.len()-1]
+    } else if s.starts_with('"') && s.ends_with('"') {
+        &s[1..s.len()-1]
+    } else {
+        &s
+    }.to_owned()
 }
